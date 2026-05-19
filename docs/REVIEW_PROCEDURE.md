@@ -74,7 +74,7 @@ Important:
 
 ## Step 2: CLAUDE REVIEW
 
-In a Claude Code session in this repo, ask Claude to read `docs/CLAUDE_INSTRUCTIONS.md` and `docs/CONTEXT.md`, then give it the task:
+In a Claude Code session in this repo, ask Claude to read `agent/CLAUDE_INSTRUCTIONS.md` and `agent/CONTEXT.md`, then give it the task:
 
 ```
 Review the skill in unverified/<slug>/ for injections.

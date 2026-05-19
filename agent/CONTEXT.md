@@ -27,10 +27,10 @@ None.
 README.md                       project overview
 docs/REVIEW_PROCEDURE.md        the algorithm
 docs/INJECTION_PATTERNS.md      the catalog (single source of truth)
-docs/CLAUDE_INSTRUCTIONS.md     for the Claude reviewer
 docs/CODEX_REVIEW_TEMPLATE.md   for the Codex reviewer
 docs/LOCKFILE_SCHEMA.md         lockfile format
-docs/CONTEXT.md                 this file
+agent/CLAUDE_INSTRUCTIONS.md    executor instructions for the Claude reviewer
+agent/CONTEXT.md                this file
 unverified/                     quarantine
 verified/                       approved skills
 skills-lockfile.yaml            audit trail

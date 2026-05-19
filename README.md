@@ -34,10 +34,10 @@ git checkout -b review/<slug>-$(date +%Y%m%d)
 # Download the skill folder into unverified/<slug>/ (see docs/REVIEW_PROCEDURE.md)
 ```
 
-When you start a Claude session in this repo, ask Claude to first read:
+When you start a Claude session in this repo, ask Claude to first read its executor files in `agent/`:
 
-1. `docs/CLAUDE_INSTRUCTIONS.md` (executor instructions)
-2. `docs/CONTEXT.md` (current state)
+1. `agent/CLAUDE_INSTRUCTIONS.md` (executor instructions for the Claude reviewer)
+2. `agent/CONTEXT.md` (current state of the vault)
 
 Then give it the task: **"review the skill in `unverified/<slug>/` for injections"**.
 
@@ -45,15 +45,23 @@ For the Codex pass, use the template in `docs/CODEX_REVIEW_TEMPLATE.md`.
 
 ## What's in this repo
 
+The repo separates two audiences:
+
+- `docs/` is for the human operator: procedure, shared pattern catalog, Codex prompt template, lockfile schema.
+- `agent/` is for the Claude reviewer agent: its self-contained executor instructions and the dynamic context file. The agent reads these at session start.
+
+The shared pattern catalog (`docs/INJECTION_PATTERNS.md`) is referenced by both audiences and by both LLM reviewers; it intentionally lives in `docs/` so people can read it directly without digging into `agent/`.
+
 ```
 openclaw-skills-vault/
   README.md                       this file
-  docs/
+  docs/                           for the human operator
     REVIEW_PROCEDURE.md           the 6-step algorithm
-    INJECTION_PATTERNS.md         the shared catalog used by both reviewers
-    CLAUDE_INSTRUCTIONS.md        instructions for the Claude reviewer
+    INJECTION_PATTERNS.md         the shared catalog used by both reviewers and humans
     CODEX_REVIEW_TEMPLATE.md      the <pr_review> template for Codex
     LOCKFILE_SCHEMA.md            schema for skills-lockfile.yaml entries
+  agent/                          for the Claude reviewer agent
+    CLAUDE_INSTRUCTIONS.md        executor instructions (read first)
     CONTEXT.md                    dynamic state (active reviews, history)
   unverified/                     quarantine zone, files are unstaged
   verified/                       approved skills, ready to install
