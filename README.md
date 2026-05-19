@@ -11,13 +11,31 @@ The `name` and `description` fields of every eligible skill are injected directl
 This repo gives you a low-tech, repeatable process to vet a skill before it can reach your agent:
 
 1. Pull the skill into a quarantine folder (`unverified/`).
-2. Have Claude review it against a shared pattern catalog.
-3. Have Codex review it independently with the same catalog.
+2. Have Claude review it (see "How the review works" below).
+3. Have Codex review it independently with the same rules.
 4. Make the call yourself based on both verdicts.
 5. Move it to `verified/` and record a lockfile entry (sha256 + verdicts).
 6. Install into your agent only from `verified/`.
 
 No Docker required for the default flow. No CI required. Two LLMs and a human decision.
+
+## How the review works
+
+Each LLM reviewer (Claude and Codex) runs under a **dual mandate** on the same skill folder:
+
+1. **Closed checklist - against the catalog.** The reviewer walks `docs/INJECTION_PATTERNS.md` section by section and flags every match: bracket-tag patterns, role-addressing phrases, Unicode anomalies, tool-bypass wording, shell and supply-chain risks, secret exfiltration, install-domain whitelist, structural red flags. This part is deterministic and reproducible. The catalog is the floor: anything in it must be detected.
+
+2. **Open analysis - the reviewer's own judgement.** After the catalog pass, the reviewer does a second read with no checklist and looks for anything else that smells wrong: novel injection techniques the catalog has not seen yet, paraphrased attacks, suspicious combinations of innocuous-looking elements, inconsistencies between what the skill claims and what its code does. This is why the system uses LLMs instead of regex: catalog rules can only catch attacks people have already named.
+
+The verdict format separates the two cleanly:
+
+- `FINDINGS` - catalog hits, each with a section reference (s1..s8).
+- `NOVEL_FINDINGS` - anything the reviewer spotted through open analysis. The operator reads these on every review, even when both verdicts say PASS.
+- `CATALOG_SUGGESTIONS` - proposed catalog additions. The operator decides whether to merge them, which means the catalog grows from real findings rather than only what was anticipated up front.
+
+**Asymmetry on severity.** A novel finding raises the verdict to at most WARN, never directly to BLOCK. BLOCK is reserved for explicit catalog hits where the rule has been pre-agreed. This keeps free analysis useful without making it scary: surface anything that looks off; the operator decides what to do with it.
+
+Two reviewers, two independent passes, the same dual mandate, one human decision. The catalog stays the floor; the reviewers can always raise the ceiling.
 
 ## Quick start
 
@@ -71,7 +89,7 @@ openclaw-skills-vault/
 
 ## Threat model
 
-This vault protects against:
+Catalog coverage (closed checklist, deterministic):
 
 - Injection patterns in `description`/`name` that hijack the agent's system prompt.
 - Unicode-based obfuscation (RTL override, zero-width characters, tag characters).
@@ -79,11 +97,18 @@ This vault protects against:
 - Supply-chain risks in installer specs (untrusted download domains, pipe-to-shell scripts).
 - Secret exfiltration patterns in supporting scripts.
 
+Open-analysis coverage (each reviewer's own judgement, non-deterministic):
+
+- Novel injection wording that does not match catalog phrases verbatim.
+- Combinations of individually innocent elements that together create risk.
+- Behavioral requests that functionally skip a gate without matching catalog language.
+- Inconsistencies between a skill's stated purpose and its actual code.
+
 It does NOT protect against:
 
-- Zero-day injection techniques absent from the catalog. Update the catalog when you see new ones.
-- Runtime behavior that only manifests at execution time (you'd need sandboxed execution for that, which is an optional Docker step described in `docs/REVIEW_PROCEDURE.md`).
+- Runtime behavior that only manifests at execution time. The optional Docker step in `docs/REVIEW_PROCEDURE.md` exists for that and stays off by default.
 - Compromise of the reviewers themselves (Claude or Codex). Two independent passes reduce the risk but do not eliminate it.
+- Attacks that both reviewers fail to recognize even with open analysis. The dual-pass design narrows this window; it does not close it. Extend the catalog whenever a real incident teaches you a new pattern.
 
 ## Smoke test before first production use
 
@@ -95,4 +120,4 @@ MIT. Use it, fork it, extend the pattern catalog, contribute back.
 
 ## Status
 
-Initial public version. No verified skills yet. The catalog is a starting point and will grow as new injection patterns surface.
+Initial public version. No verified skills yet. The catalog is a starting point; expect it to grow as the open-analysis pass surfaces new patterns and operators promote good `CATALOG_SUGGESTIONS` into the catalog.
