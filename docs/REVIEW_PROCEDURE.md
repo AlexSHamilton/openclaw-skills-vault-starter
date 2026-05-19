@@ -80,12 +80,13 @@ In a Claude Code session in this repo, ask Claude to read `agent/CLAUDE_INSTRUCT
 Review the skill in unverified/<slug>/ for injections.
 ```
 
-Claude will:
+Claude operates under a dual mandate (catalog + open analysis). It will:
 
 1. Read `docs/INJECTION_PATTERNS.md` (the catalog).
 2. Read `unverified/<slug>/SKILL.md` and all supporting files.
-3. Apply the catalog section by section.
-4. Write a verdict to `unverified/<slug>/.claude-verdict.md` in this format:
+3. Apply the catalog section by section (closed checklist).
+4. Run a second pass using its own judgement to spot anything suspicious that is not yet in the catalog (open analysis).
+5. Write a verdict to `unverified/<slug>/.claude-verdict.md` in this format:
 
 ```markdown
 # Claude review verdict
@@ -98,19 +99,32 @@ Claude will:
 ## VERDICT
 PASS | WARN | BLOCK
 
-## FINDINGS
-- [path:line] description (catalog section X)
+## FINDINGS (catalog hits)
+- [path:line] description (sX)
 - ...
+(or: none)
+
+## NOVEL_FINDINGS (open analysis, not in catalog)
+- [path:line] description + why this looks suspicious
+- ...
+(or: none)
+
+## CATALOG_SUGGESTIONS (optional)
+- Proposed pattern + suggested section + rationale
+- ...
+(or: none)
 
 ## REASONING
 1-2 sentences.
 ```
 
+Novel findings raise the verdict to at most WARN, never directly to BLOCK. BLOCK is reserved for explicit catalog hits.
+
 ---
 
 ## Step 3: CODEX REVIEW
 
-Switch to a Codex CLI session in the same working directory. Use the template in `docs/CODEX_REVIEW_TEMPLATE.md` to form the request, substituting `<slug>` and the branch name. The template tells Codex to read the same catalog and produce a verdict in the same format.
+Switch to a Codex CLI session in the same working directory. Use the template in `docs/CODEX_REVIEW_TEMPLATE.md` to form the request, substituting `<slug>` and the branch name. The template puts Codex under the same dual mandate (catalog + open analysis) and asks for the same output format (FINDINGS / NOVEL_FINDINGS / CATALOG_SUGGESTIONS).
 
 Save Codex's verdict to `unverified/<slug>/.codex-verdict.md` in the same structure as the Claude verdict.
 
@@ -118,13 +132,27 @@ Save Codex's verdict to `unverified/<slug>/.codex-verdict.md` in the same struct
 
 ## Step 4: HIL DECISION
 
-Read both verdict files. Apply the decision matrix:
+Read both verdict files. Apply the decision matrix on the **verdict line**:
 
-| Claude | Codex | Action |
+| Claude verdict | Codex verdict | Action |
 |---|---|---|
-| PASS | PASS | proceed to Step 5 |
+| PASS | PASS | proceed to Step 5 (read NOVEL_FINDINGS first, see below) |
 | any BLOCK | any | drop the skill (Step 4a) |
-| any other mixed (PASS+WARN, WARN+WARN, etc.) | manual review |
+| any other mixed (PASS+WARN, WARN+WARN, etc.) | manual review (Step 4b) |
+
+### Read NOVEL_FINDINGS even on double-PASS
+
+A PASS verdict can still come with `NOVEL_FINDINGS` entries (when the reviewer found something curious but not severe enough to warrant WARN). Always read the NOVEL_FINDINGS block of both verdicts before promoting. If anything there gives you pause, treat the case as mixed and go to Step 4b.
+
+### Catalog suggestions
+
+Both verdicts may include `CATALOG_SUGGESTIONS`. For each suggestion you find valuable:
+
+1. Open `docs/INJECTION_PATTERNS.md`.
+2. Add the pattern to the relevant section (s1 to s8) with a short example and an entry in s10 (catalog history) describing the addition and its source ("from review of <slug>, <date>").
+3. Commit the catalog change separately from the skill promotion so the history is clean: `chore(catalog): add <pattern> (from <slug> review)`.
+
+You do NOT need to re-review already-verified skills against an extended catalog; the lockfile's `catalog_version_at_review` field records which version each skill was reviewed against. If a future incident makes a specific extension load-bearing, you can decide then whether to re-review affected skills.
 
 ### Step 4a: drop a skill
 
@@ -134,9 +162,11 @@ git branch -D review/$SLUG-$DATE
 rm -rf unverified/$SLUG
 ```
 
-### Step 4 (mixed verdicts): manual review
+### Step 4b: mixed verdicts (manual review)
 
-Read both `.claude-verdict.md` and `.codex-verdict.md`. Look at each finding by hand. Decide whether to approve (with documented reasoning) or drop. Record your reasoning - it goes into the lockfile in Step 5.
+Read both `.claude-verdict.md` and `.codex-verdict.md`, including FINDINGS and NOVEL_FINDINGS blocks. Look at each finding by hand. Decide whether to approve (with documented reasoning) or drop. If you approve despite a WARN, the reasoning must be specific (which findings you dismissed and why) - this goes into `hil_reasoning` in the lockfile (Step 5).
+
+If Claude and Codex disagree sharply on the verdict (one PASS, one WARN), the disagreement itself is information. Read both blocks; if one reviewer spotted something the other missed, that is usually a real signal worth heeding.
 
 ### Step 4.5 (optional, paranoid): sandboxed install test
 
