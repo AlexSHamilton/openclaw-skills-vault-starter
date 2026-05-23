@@ -37,6 +37,96 @@ The verdict format separates the two cleanly:
 
 Two reviewers, two independent passes, the same dual mandate, one human decision. The catalog stays the floor; the reviewers can always raise the ceiling.
 
+## Fetching skills into unverified/
+
+Before you can review a skill you need its files locally. OpenClaw has two categories of skills and they come from different places. Do not install anything into your live agent yet - that happens only after the review passes.
+
+### Category 1: registry skills (ClawHub)
+
+Most third-party and community skills live in the ClawHub registry. The recommended way to fetch them is the `clawhub` CLI, which downloads the zip, unpacks it, and writes provenance metadata - without touching your OpenClaw installation at all.
+
+**One-time setup:**
+
+```bash
+npm i -g clawhub
+```
+
+No login required for public skills.
+
+**Fetch a skill into the quarantine folder:**
+
+```bash
+VAULT=/path/to/openclaw-skills-vault/unverified
+
+clawhub --workdir "$VAULT" --dir . install <slug>
+```
+
+Result:
+
+```
+unverified/
+  <slug>/
+    SKILL.md
+    scripts/          (if the skill includes any)
+    .clawhub/
+      origin.json     (registry, version, installed timestamp)
+```
+
+**Find the correct slug before downloading:**
+
+```bash
+clawhub search "keyword"
+clawhub inspect <slug>          # shows metadata and file list without downloading
+clawhub inspect <slug> --files  # lists every file that will be unpacked
+```
+
+The slug is a flat identifier with no slashes (e.g. `apollo`, not `author/apollo`). The search output shows `slug  @owner  Display Name  (score)` - use the first column.
+
+**Fetch a specific version:**
+
+```bash
+clawhub --workdir "$VAULT" --dir . install <slug> --version 1.2.3
+```
+
+**If the registry is unreachable** (`fetch failed` / DNS not resolving):
+
+The registry runs on Vercel. If your machine uses a custom DNS resolver (Tailscale, corporate VPN, etc.) it may not resolve `clawhub.ai`. Quick fix:
+
+```bash
+# Resolve the IP once via a public resolver
+dig clawhub.ai @8.8.8.8 +short   # should return something like 216.150.1.1
+
+# Pin it in /etc/hosts so your system resolver uses it
+sudo sh -c 'echo "216.150.1.1 clawhub.ai" >> /etc/hosts'
+```
+
+You can remove the line from `/etc/hosts` after downloading.
+
+### Category 2: bundled skills
+
+A small set of skills ships bundled with OpenClaw itself (examples: `wacli`, `discord`, `slack`, `github`). These are not in the ClawHub registry. Their source is the `openclaw/openclaw` GitHub repository.
+
+Fetch with the `gh` CLI (requires `gh auth login` first):
+
+```bash
+SLUG=wacli   # or discord, slack, github, etc.
+DEST=/path/to/openclaw-skills-vault/unverified/$SLUG
+
+mkdir -p "$DEST"
+gh api "repos/openclaw/openclaw/contents/skills/$SLUG/SKILL.md" \
+  --jq '.content' | base64 -d > "$DEST/SKILL.md"
+```
+
+Bundled skills typically contain only `SKILL.md` - their runtime support lives inside the OpenClaw package itself, not in separate script files.
+
+### What NOT to do
+
+- Do not run `openclaw skills install <slug>` - that puts the skill directly into your active agent workspace, bypassing this review process entirely.
+- Do not execute any file from `unverified/` before the review passes.
+- Do not copy a skill from `unverified/` to `verified/` manually - follow the promotion step in `docs/REVIEW_PROCEDURE.md` so the lockfile entry gets written.
+
+---
+
 ## Quick start
 
 ```bash
@@ -49,13 +139,15 @@ cat docs/REVIEW_PROCEDURE.md
 
 # 3. To review a new skill:
 git checkout -b review/<slug>-$(date +%Y%m%d)
-# Download the skill folder into unverified/<slug>/ (see docs/REVIEW_PROCEDURE.md)
+# Download the skill folder into unverified/<slug>/ (see "Fetching skills" above)
 ```
 
 When you start a Claude session in this repo, ask Claude to first read its executor files in `agent/`:
 
 1. `agent/CLAUDE_INSTRUCTIONS.md` (executor instructions for the Claude reviewer)
 2. `agent/CONTEXT.md` (current state of the vault)
+
+You can also ask Claude to fetch a skill for you before reviewing it. Just say something like **"download the skill `<slug>` from the registry into unverified/ following the instructions in CLAUDE_INSTRUCTIONS.md"** and Claude will handle the `clawhub` command, slug lookup, and DNS quirks for you.
 
 Then give it the task: **"review the skill in `unverified/<slug>/` for injections"**.
 
@@ -110,9 +202,15 @@ It does NOT protect against:
 - Compromise of the reviewers themselves (Claude or Codex). Two independent passes reduce the risk but do not eliminate it.
 - Attacks that both reviewers fail to recognize even with open analysis. The dual-pass design narrows this window; it does not close it. Extend the catalog whenever a real incident teaches you a new pattern.
 
-## Smoke test before first production use
+## Smoke test
 
-Before trusting this workflow for real installs, run the smoke test described in `docs/REVIEW_PROCEDURE.md` (section "Smoke test"). Build a small corpus of synthetic SKILL.md files with known injections, run both reviewers, and verify detection rate >= 95%. If lower, extend `docs/INJECTION_PATTERNS.md` and re-run.
+> ⚠️ **WARNING - intentional injections present.** The folder `unverified/smoke-test/` contains 16 synthetic skills with deliberately embedded prompt-injection payloads (bracket-tags, Unicode anomalies, pipe-to-shell scripts, credential exfiltration, and more). They exist solely as a calibration corpus for the dual-review pipeline. Do not install or execute any file from that folder.
+
+A pre-built calibration corpus lives in `unverified/smoke-test/` - 15 malicious skills covering every catalog section (§1–8) plus novel semantic attacks, and 1 clean control. Before relying on this pipeline for real installs, run both reviewers against all 16 skills yourself and check that you hit ≥ 95% detection (BLOCK or WARN on malicious, PASS on the clean control).
+
+**Reference results** from an independent calibration round (Claude Sonnet 4.6 + GPT Codex medium) are recorded in `unverified/smoke-test/smoke-test-results.md`. That file explains what each skill tests, the verdicts both models produced, and why the one apparent miss (`docstring_linter` → WARN instead of PASS) is a corpus artifact rather than a pipeline flaw.
+
+You are encouraged to run the smoke test yourself and reach your own conclusions before deciding whether this pipeline meets your trust bar. Do not rely solely on the reference results - model behaviour varies across versions and prompting styles.
 
 ## License
 

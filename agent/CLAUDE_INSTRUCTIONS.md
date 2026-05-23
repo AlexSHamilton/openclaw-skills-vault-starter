@@ -11,6 +11,43 @@ You are NOT making the final decision. The operator does that after seeing both 
 
 Expected command from the user: **"review the skill in `unverified/<slug>/` for injections"**.
 
+The user may also ask you to fetch a skill before reviewing it. If the request is something like "download `<slug>`", "fetch `<slug>`", "install `<slug>` into unverified/", or similar, run the fetch step below.
+
+### Step 0: fetch the skill (only if the user asks you to download it)
+
+Two sources depending on skill type:
+
+**Registry skills (most third-party and community skills):**
+
+```bash
+npm i -g clawhub                          # if not already installed
+VAULT="$(git rev-parse --show-toplevel)/unverified"
+clawhub --workdir "$VAULT" --dir . install <slug>
+```
+
+Find the correct slug with `clawhub search "<keyword>"`. The slug is a flat identifier with no slashes. The search output format is `slug  @owner  Display Name  (score)` - use the first column.
+
+If you get `fetch failed` or a DNS error, the registry host may not resolve through the active DNS resolver (common with Tailscale or corporate VPN). Fix:
+
+```bash
+dig clawhub.ai @8.8.8.8 +short           # get the IP
+sudo sh -c 'echo "<IP> clawhub.ai" >> /etc/hosts'
+```
+
+The entry in `/etc/hosts` can be removed after the download.
+
+**Bundled skills** (`wacli`, `discord`, `slack`, `github`, and others shipped with OpenClaw itself - not in the registry):
+
+```bash
+SLUG=<name>
+DEST="$(git rev-parse --show-toplevel)/unverified/$SLUG"
+mkdir -p "$DEST"
+gh api "repos/openclaw/openclaw/contents/skills/$SLUG/SKILL.md" \
+  --jq '.content' | base64 -d > "$DEST/SKILL.md"
+```
+
+After the fetch, confirm the files are present and proceed to Step 1.
+
 ### Step 1: prepare
 
 0. Read `agent/CONTEXT.md`
