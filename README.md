@@ -11,15 +11,30 @@ The `name` and `description` fields of every eligible skill are injected directl
 This repo gives you a low-tech, repeatable process to vet a skill before it can reach your agent:
 
 1. Pull the skill into a quarantine folder (`unverified/`).
-2. Have Claude review it (see "How the review works" below).
-3. Have Codex review it independently with the same rules.
-4. Make the call yourself based on both verdicts.
-5. Move it to `verified/` and record a lockfile entry (sha256 + verdicts).
-6. Install into your agent only from `verified/`.
+2. Run the deterministic pre-scan (`python3 tools/prescan.py unverified/<slug>/`) before any LLM sees the file.
+3. Have Claude review it (see "How the review works" below).
+4. Have Codex review it independently with the same rules.
+5. Make the call yourself based on the pre-scan and both verdicts.
+6. Move it to `verified/` and record a lockfile entry (sha256 + verdicts).
+7. Install into your agent only from `verified/`.
 
-No Docker required for the default flow. No CI required. Two LLMs and a human decision.
+No Docker required for the default flow. No CI required. A deterministic pre-scan, two LLMs, and a human decision.
 
 ## How the review works
+
+### Step 0: deterministic pre-scan (before any LLM)
+
+Before either model reads the skill, run the pre-scan:
+
+```bash
+python3 tools/prescan.py unverified/<slug>/
+```
+
+It is pure-stdlib Python with no dependencies and runs offline. It is a regex + Unicode floor, not a replacement for the LLM passes: it cannot be argued out of a finding and shares none of the LLMs' failure modes, which is exactly what you want against the recursive-trust problem (a skill that tries to talk the reviewer itself into a PASS). It flags bracket-tag delimiters (including zero-width-obfuscated ones like `[adm‌in]`, which it de-obfuscates first), Unicode anomalies, pipe-to-shell and inline-exec patterns, and meta-injection phrases addressed to the reviewer (catalog s9). Exit codes: `0` clean, `1` WARN-level, `2` BLOCK-level.
+
+Treat its output as ground truth the LLM passes may not override: a deterministic BLOCK stands regardless of any text in the skill claiming it is a false positive. A clean pre-scan does **not** mean the skill is safe - only that no string-level attack was found. Semantic and behavioral attacks are what the two LLM passes below are for. If you are minded to be paranoid, this is the cheap first gate to run before spending any model calls.
+
+### The two LLM passes
 
 Each LLM reviewer (Claude and Codex) runs under a **dual mandate** on the same skill folder:
 
@@ -173,6 +188,8 @@ openclaw-skills-vault/
   agent/                          for the Claude reviewer agent
     CLAUDE_INSTRUCTIONS.md        executor instructions (read first)
     CONTEXT.md                    dynamic state (active reviews, history)
+  tools/                          helper scripts
+    prescan.py                    deterministic pre-scan, run before the LLM passes
   unverified/                     quarantine zone, files are unstaged
   verified/                       approved skills, ready to install
   skills-lockfile.yaml            audit trail
