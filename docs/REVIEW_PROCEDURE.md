@@ -72,6 +72,27 @@ Important:
 
 ---
 
+## Step 1.5: PRE-SCAN (deterministic, mandatory)
+
+Before either LLM sees the skill, run the deterministic pre-scan:
+
+```bash
+python3 tools/prescan.py unverified/$SLUG/
+```
+
+Why first: a regex and a codepoint check cannot be argued out of their findings. This is the one layer in the pipeline that shares none of the LLMs' failure modes - it is the floor under the two model passes, aimed squarely at the recursive-trust problem (a skill talking the reviewer into a PASS). It catches what string/unicode rules catch: bracket-tags (including zero-width-obfuscated ones), unicode anomalies, pipe-to-shell, and meta-injection phrases addressed to the reviewer (s9).
+
+Exit codes: `0` clean, `1` WARN-level hits, `2` BLOCK-level hits.
+
+What to do with the result:
+
+- **Exit 2 (BLOCK):** the skill is already disqualified on a deterministic hard hit. You may still run the LLM passes for the catalog/novel findings, but the pre-scan BLOCK stands regardless of what the models say. A reviewer cannot downgrade a deterministic BLOCK.
+- **Exit 1 (WARN) / Exit 0 (clean):** proceed to the LLM passes normally. The pre-scan is a floor, not a ceiling - the LLMs still do the full catalog + open-analysis work on top. A clean pre-scan does NOT mean the skill is safe; it means no *string-level* attack was found. Semantic and behavioral attacks are the LLMs' job.
+
+Paste the pre-scan output into the Claude and Codex sessions as ground truth. The models must treat its hits as established, not re-litigate them.
+
+---
+
 ## Step 2: CLAUDE REVIEW
 
 In a Claude Code session in this repo, ask Claude to read `agent/CLAUDE_INSTRUCTIONS.md` and `agent/CONTEXT.md`, then give it the task:
@@ -149,7 +170,7 @@ A PASS verdict can still come with `NOVEL_FINDINGS` entries (when the reviewer f
 Both verdicts may include `CATALOG_SUGGESTIONS`. For each suggestion you find valuable:
 
 1. Open `docs/INJECTION_PATTERNS.md`.
-2. Add the pattern to the relevant section (s1 to s8) with a short example and an entry in s10 (catalog history) describing the addition and its source ("from review of <slug>, <date>").
+2. Add the pattern to the relevant section (s1 to s9) with a short example and an entry in s11 (catalog history) describing the addition and its source ("from review of <slug>, <date>").
 3. Commit the catalog change separately from the skill promotion so the history is clean: `chore(catalog): add <pattern> (from <slug> review)`.
 
 You do NOT need to re-review already-verified skills against an extended catalog; the lockfile's `catalog_version_at_review` field records which version each skill was reviewed against. If a future incident makes a specific extension load-bearing, you can decide then whether to re-review affected skills.

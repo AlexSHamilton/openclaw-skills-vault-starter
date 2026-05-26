@@ -29,7 +29,7 @@ Each LLM reviewer (Claude and Codex) runs under a **dual mandate** on the same s
 
 The verdict format separates the two cleanly:
 
-- `FINDINGS` - catalog hits, each with a section reference (s1..s8).
+- `FINDINGS` - catalog hits, each with a section reference (s1..s9).
 - `NOVEL_FINDINGS` - anything the reviewer spotted through open analysis. The operator reads these on every review, even when both verdicts say PASS.
 - `CATALOG_SUGGESTIONS` - proposed catalog additions. The operator decides whether to merge them, which means the catalog grows from real findings rather than only what was anticipated up front.
 
