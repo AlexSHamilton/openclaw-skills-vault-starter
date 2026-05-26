@@ -49,7 +49,7 @@ Expected verdict: **WARN** (novel findings cap at WARN per §9).
 
 Added 2026-05-26. Unlike Parts 1–2, these skills assume the attacker **knows the
 catalog and the review rules** and attacks the reviewer directly - the
-"заморочившийся" / motivated-adversary case the recursive-trust review flagged.
+motivated-adversary case the recursive-trust review flagged.
 They are the test for the new §9 (meta-injection targeting the reviewer) and for
 whether the deterministic pre-scan (`tools/prescan.py`) holds where an LLM might
 be talked out of a finding.
